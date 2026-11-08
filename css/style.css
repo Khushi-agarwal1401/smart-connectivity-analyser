@@ -538,5 +538,103 @@ body {
 }
 
 /* =========================================================
+   NETWORK HISTORY FILTERS
+   ========================================================= */
+
+.history-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+    padding: 16px;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.history-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.history-filter-group label {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.history-filter-group input {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--glass-border);
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.85rem;
+    color-scheme: light;
+}
+
+.history-filter-group input:focus-visible {
+    outline: 2px solid var(--accent-purple);
+    outline-offset: 2px;
+}
+
+.history-filter-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.history-filter-button {
+    flex: 1 1 140px;
+    min-height: 42px;
+}
+
+.history-filter-message {
+    min-height: 18px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.history-filter-message.is-error {
+    color: #b91c1c;
+}
+
+.history-empty-state {
+    padding: 24px;
+    border: 1px dashed var(--glass-border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.35);
+    color: var(--text-secondary);
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.history-empty-state[hidden],
+#historyChartContainer[hidden] {
+    display: none;
+}
+
+@media (max-width: 639px) {
+    .history-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .history-filter-actions {
+        flex-direction: column;
+    }
+
+    .history-filter-button {
+        width: 100%;
+    }
+}
+
+/* =========================================================
    END
    ========================================================= */

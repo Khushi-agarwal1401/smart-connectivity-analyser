@@ -212,6 +212,17 @@ function setupButtons() {
     $("historyRange")?.addEventListener("change", (event) => {
         loadNetworkHistory(event.target.value);
     });
+    // Apply history filters.
+    $("applyHistoryFilters")?.addEventListener(
+        "click",
+        () => loadNetworkHistory()
+    );
+
+    // Reset history filters.
+    $("resetHistoryFilters")?.addEventListener(
+        "click",
+        resetNetworkHistoryFilters
+    );
 
     $("detectLocation")?.addEventListener(
         "click",
@@ -822,14 +833,210 @@ function normalizeHistoryItem(item = {}) {
         )
     };
 }
+/* =========================================================
+   NETWORK HISTORY FILTER HELPERS
+   ========================================================= */
+
+function validateHistoryFilterValues({
+    startDate = "",
+    endDate = "",
+    minScore = "",
+    maxScore = ""
+} = {}) {
+
+    const normalize = value =>
+        String(value ?? "").trim();
+
+    startDate = normalize(startDate);
+    endDate = normalize(endDate);
+    minScore = normalize(minScore);
+    maxScore = normalize(maxScore);
+
+    function isValidDate(value) {
+        if (!value) return true;
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return false;
+        }
+
+        const parsed = new Date(
+            `${value}T00:00:00.000Z`
+        );
+
+        return (
+            !Number.isNaN(parsed.getTime()) &&
+            parsed.toISOString().slice(0, 10) === value
+        );
+    }
+
+    if (!isValidDate(startDate) || !isValidDate(endDate)) {
+        return {
+            valid: false,
+            error: "Please enter valid dates."
+        };
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+        return {
+            valid: false,
+            error: "Start date cannot be after end date."
+        };
+    }
+
+    function parseScore(value, label) {
+        if (value === "") {
+            return {
+                valid: true,
+                value: null
+            };
+        }
+
+        const score = Number(value);
+
+        if (
+            !Number.isFinite(score) ||
+            score < 0 ||
+            score > 100
+        ) {
+            return {
+                valid: false,
+                error: `${label} must be between 0 and 100.`
+            };
+        }
+
+        return {
+            valid: true,
+            value: score
+        };
+    }
+
+    const minimum = parseScore(minScore, "Minimum score");
+
+    if (!minimum.valid) {
+        return {
+            valid: false,
+            error: minimum.error
+        };
+    }
+
+    const maximum = parseScore(maxScore, "Maximum score");
+
+    if (!maximum.valid) {
+        return {
+            valid: false,
+            error: maximum.error
+        };
+    }
+
+    if (
+        minimum.value !== null &&
+        maximum.value !== null &&
+        minimum.value > maximum.value
+    ) {
+        return {
+            valid: false,
+            error: "Minimum score cannot exceed maximum score."
+        };
+    }
+
+    return {
+        valid: true,
+        filters: {
+            startDate,
+            endDate,
+            minScore: minimum.value,
+            maxScore: maximum.value
+        }
+    };
+}
+
+
+function setHistoryFilterMessage(message, isError = false) {
+    const element = $("historyFilterMessage");
+
+    if (!element) return;
+
+    element.textContent = message;
+
+    element.classList.toggle(
+        "is-error",
+        isError
+    );
+}
+
+
+function resetNetworkHistoryFilters() {
+    const filterIds = [
+        "historyStartDate",
+        "historyEndDate",
+        "historyMinScore",
+        "historyMaxScore"
+    ];
+
+    filterIds.forEach(id => {
+        const element = $(id);
+
+        if (element) {
+            element.value = "";
+        }
+    });
+
+    const rangeElement = $("historyRange");
+
+    if (rangeElement) {
+        rangeElement.value = "all";
+    }
+
+    setHistoryFilterMessage("");
+
+    loadNetworkHistory("all");
+}
 
 async function loadNetworkHistory(range = null) {
     const selectedRange =
         range || $("historyRange")?.value || "recent";
 
+    const validation = validateHistoryFilterValues({
+        startDate: $("historyStartDate")?.value || "",
+        endDate: $("historyEndDate")?.value || "",
+        minScore: $("historyMinScore")?.value || "",
+        maxScore: $("historyMaxScore")?.value || ""
+    });
+
+    if (!validation.valid) {
+        setHistoryFilterMessage(validation.error, true);
+        return;
+    }
+
+    const filters = validation.filters;
+    const params = new URLSearchParams();
+
+    params.set("range", selectedRange);
+
+    if (filters.startDate) {
+        params.set("start_date", filters.startDate);
+    }
+
+    if (filters.endDate) {
+        params.set("end_date", filters.endDate);
+    }
+
+    if (filters.minScore !== null) {
+        params.set("min_score", filters.minScore);
+    }
+
+    if (filters.maxScore !== null) {
+        params.set("max_score", filters.maxScore);
+    }
+
+    const canvasContainer = $("historyChartContainer");
+    const emptyState = $("historyEmptyState");
+
     try {
+        setHistoryFilterMessage("Loading network history...");
+
         const response = await fetch(
-            `${API_BASE}/network-history?range=${encodeURIComponent(selectedRange)}`,
+            `${API_BASE}/network-history?${params.toString()}`,
             {
                 method: "GET",
                 cache: "no-store"
@@ -863,15 +1070,89 @@ async function loadNetworkHistory(range = null) {
                 Number.isFinite(Date.parse(item.timestamp))
             );
 
+        if (sessionTests.length === 0) {
+            updateHistoryChart([], "all");
+
+            if (canvasContainer) {
+                canvasContainer.hidden = true;
+            }
+
+            if (emptyState) {
+                emptyState.hidden = false;
+            }
+
+            updateSessionStatistics();
+
+            setHistoryFilterMessage(
+                "No records match the selected filters."
+            );
+
+            return;
+        }
+
+        if (canvasContainer) {
+            canvasContainer.hidden = false;
+        }
+
+        if (emptyState) {
+            emptyState.hidden = true;
+        }
+
+        // The backend has already applied all selected filters.
+        updateHistoryChart(sessionTests, "all");
+
+        updateSessionStatistics();
+
+        setHistoryFilterMessage(
+            `Showing ${sessionTests.length} matching network record(s).`
+        );
+
+        // Preserve the existing latest-measurement restoration.
+        const latest = sessionTests[sessionTests.length - 1];
+
+        if (
+            currentMetrics.download === null &&
+            latest.download_mbps !== null
+        ) {
+            currentMetrics.download = Number(
+                latest.download_mbps
+            );
+        }
+
+        if (
+            currentMetrics.upload === null &&
+            latest.upload_mbps !== null
+        ) {
+            currentMetrics.upload = Number(
+                latest.upload_mbps
+            );
+        }
+
     } catch (error) {
         console.warn(
             "Network history could not be loaded:",
             error.message
         );
-    }
 
-    updateHistoryChart(sessionTests, selectedRange);
-    updateSessionStatistics();
+        sessionTests = [];
+
+        updateHistoryChart([], "all");
+
+        if (canvasContainer) {
+            canvasContainer.hidden = true;
+        }
+
+        if (emptyState) {
+            emptyState.hidden = true;
+        }
+
+        updateSessionStatistics();
+
+        setHistoryFilterMessage(
+            "Unable to load network history. Check the backend connection.",
+            true
+        );
+    }
 }
 
 function updateHistoryChart(history = sessionTests, range = null) {
@@ -2036,6 +2317,7 @@ const smartConnectivity = {
     findBetterArea,
     startNetworkTest,
     exportHistoryToCSV,
+    validateHistoryFilterValues,
     calculateConnectivityScore
 };
 
@@ -2064,7 +2346,8 @@ if (typeof module !== "undefined" && module.exports) {
         isValidMetricNumber,
         formatNumber,
         formatMetric,
-        formatNetworkMetric
+        formatNetworkMetric,
+        validateHistoryFilterValues
     };
 }
 /* =========================================================
