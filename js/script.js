@@ -33,6 +33,7 @@ let currentMetrics = {
     jitter: null,
     packetLoss: null,
     networkType: "Unknown",
+    networkTypeDetail: "Connection type",
     score: 0
 };
 
@@ -243,13 +244,32 @@ function setupButtons() {
 function setupNetworkListeners() {
     window.addEventListener("online", () => {
         updateNetworkStatus();
+        detectNetworkType();
         showToast("Internet connection restored.");
     });
 
     window.addEventListener("offline", () => {
         updateNetworkStatus();
+        detectNetworkType();
         showToast("Internet connection lost.");
     });
+
+    const connection =
+        typeof navigator !== "undefined"
+            ? navigator.connection ||
+              navigator.mozConnection ||
+              navigator.webkitConnection
+            : null;
+
+    if (connection && typeof connection.addEventListener === "function") {
+        connection.addEventListener("change", () => {
+            detectNetworkType();
+        });
+    } else if (connection && "onchange" in connection) {
+        connection.onchange = () => {
+            detectNetworkType();
+        };
+    }
 
     window.addEventListener("resize", () => {
         connectivityMap?.invalidateSize();
@@ -286,31 +306,146 @@ function updateNetworkStatus() {
     }
 }
 
+/**
+ * Resolves reliable network type information from browser connection data.
+ *
+ * Distinguishes verified physical media (Wi-Fi, Cellular, Ethernet, Bluetooth, WiMAX)
+ * from synthetic or unverified metrics. Avoids presenting an unverified cellular
+ * generation (e.g. from effectiveType '3g'/'4g') as a confirmed hardware result.
+ *
+ * @param {Object|null|undefined} connection - navigator.connection object
+ * @param {boolean} [isOnline=true] - Browser online status
+ * @returns {{type: string, detail: string, isKnown: boolean, effectiveType: string|null}}
+ */
+function resolveNetworkType(connection, isOnline = true) {
+    if (!isOnline) {
+        return {
+            type: "Offline",
+            detail: "No internet connection",
+            isKnown: true,
+            effectiveType: null
+        };
+    }
+
+    if (!connection || typeof connection !== "object") {
+        return {
+            type: "Unknown",
+            detail: "Network Information API not supported by browser",
+            isKnown: false,
+            effectiveType: null
+        };
+    }
+
+    const rawType = typeof connection.type === "string"
+        ? connection.type.toLowerCase().trim()
+        : "";
+
+    const rawEffectiveType = typeof connection.effectiveType === "string"
+        ? connection.effectiveType.toLowerCase().trim()
+        : null;
+
+    if (rawType === "none") {
+        return {
+            type: "Offline",
+            detail: "No active network connection",
+            isKnown: true,
+            effectiveType: null
+        };
+    }
+
+    if (rawType === "wifi") {
+        return {
+            type: "Wi-Fi",
+            detail: "Wi-Fi connection",
+            isKnown: true,
+            effectiveType: rawEffectiveType
+        };
+    }
+
+    if (rawType === "cellular") {
+        const speedContext = rawEffectiveType
+            ? `Cellular (~${rawEffectiveType.toUpperCase()} speed tier, generation unverified)`
+            : "Cellular connection (generation unverified)";
+
+        return {
+            type: "Mobile",
+            detail: speedContext,
+            isKnown: true,
+            effectiveType: rawEffectiveType
+        };
+    }
+
+    if (rawType === "ethernet") {
+        return {
+            type: "Ethernet",
+            detail: "Wired ethernet connection",
+            isKnown: true,
+            effectiveType: rawEffectiveType
+        };
+    }
+
+    if (rawType === "bluetooth") {
+        return {
+            type: "Bluetooth",
+            detail: "Bluetooth tethering connection",
+            isKnown: true,
+            effectiveType: rawEffectiveType
+        };
+    }
+
+    if (rawType === "wimax") {
+        return {
+            type: "WiMAX",
+            detail: "WiMAX wireless connection",
+            isKnown: true,
+            effectiveType: rawEffectiveType
+        };
+    }
+
+    // When connection.type is missing, "other", "unknown", or unrecognized:
+    // Do NOT treat effectiveType (e.g. "3g" or "4g") as confirmed network type.
+    const speedTierNote = rawEffectiveType
+        ? `Estimated ~${rawEffectiveType.toUpperCase()} speed tier (medium unverified)`
+        : "Network type not reported by browser";
+
+    return {
+        type: "Unknown",
+        detail: speedTierNote,
+        isKnown: false,
+        effectiveType: rawEffectiveType
+    };
+}
+
 function detectNetworkType() {
+    const isOnline =
+        typeof navigator !== "undefined" && typeof navigator.onLine === "boolean"
+            ? navigator.onLine
+            : true;
+
     const connection =
-        navigator.connection ||
-        navigator.mozConnection ||
-        navigator.webkitConnection;
+        typeof navigator !== "undefined"
+            ? navigator.connection ||
+              navigator.mozConnection ||
+              navigator.webkitConnection
+            : null;
 
-    let type = "Unknown";
+    const result = resolveNetworkType(connection, isOnline);
 
-    if (connection?.type) {
-        type = connection.type;
-    } else if (connection?.effectiveType) {
-        type = connection.effectiveType.toUpperCase();
+    currentMetrics.networkType = result.type;
+    currentMetrics.networkTypeDetail = result.detail;
+
+    if (typeof document !== "undefined") {
+        setText("networkType", result.type);
+        setText("networkTypeDetail", result.detail);
+
+        const networkTypeEl = typeof $ === "function" ? $("networkType") : null;
+        if (networkTypeEl) {
+            networkTypeEl.setAttribute("title", result.detail);
+            networkTypeEl.dataset.known = String(result.isKnown);
+        }
     }
 
-    if (type.toLowerCase() === "wifi") {
-        type = "Wi-Fi";
-    }
-
-    if (type.toLowerCase() === "cellular") {
-        type = "Mobile";
-    }
-
-    currentMetrics.networkType = type;
-
-    setText("networkType", type);
+    return result;
 }
 
 /* =========================================================
@@ -1252,6 +1387,7 @@ async function startNetworkTest() {
         jitter: null,
         packetLoss: null,
         networkType: currentMetrics.networkType,
+        networkTypeDetail: currentMetrics.networkTypeDetail,
         score: 0
     };
 
@@ -1782,6 +1918,10 @@ function updateDashboard() {
         "networkType",
         currentMetrics.networkType || "Unknown"
     );
+
+    if (currentMetrics.networkTypeDetail) {
+        setText("networkTypeDetail", currentMetrics.networkTypeDetail);
+    }
 
     currentMetrics.score =
         calculateConnectivityScore(currentMetrics);
@@ -2318,7 +2458,9 @@ const smartConnectivity = {
     startNetworkTest,
     exportHistoryToCSV,
     validateHistoryFilterValues,
-    calculateConnectivityScore
+    calculateConnectivityScore,
+    resolveNetworkType,
+    detectNetworkType
 };
 
 /* ─── Browser Exports ───────────────────────────────── */
@@ -2336,6 +2478,12 @@ if (typeof window !== "undefined") {
         loadNetworkHistory;
 
     window.METRIC_UNITS = METRIC_UNITS;
+
+    window.resolveNetworkType =
+        resolveNetworkType;
+
+    window.detectNetworkType =
+        detectNetworkType;
 }
 
 /* ─── Node.js Exports for Tests ─────────────────────── */
@@ -2347,7 +2495,9 @@ if (typeof module !== "undefined" && module.exports) {
         formatNumber,
         formatMetric,
         formatNetworkMetric,
-        validateHistoryFilterValues
+        validateHistoryFilterValues,
+        resolveNetworkType,
+        detectNetworkType
     };
 }
 /* =========================================================
