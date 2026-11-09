@@ -79,12 +79,14 @@ async function openScenario(browser, scenario) {
     const empty = await openScenario(browser, "empty");
     await empty.waitForFunction(() => !document.getElementById("historyEmptyState").hidden);
     assert.equal(await empty.locator("#historyErrorState").isVisible(), false);
+    assert.equal((await empty.locator("#historyFilterMessage").innerText()).trim(), "");
     await empty.screenshot({ path: path.join(output, "issue-5-empty-history.png"), fullPage: true });
     await empty.close();
 
     const failed = await openScenario(browser, "api-failure");
     await failed.waitForFunction(() => !document.getElementById("historyErrorState").hidden);
     assert.equal(await failed.locator("#historyEmptyState").isVisible(), false);
+    assert.equal((await failed.locator("#historyFilterMessage").innerText()).trim(), "");
     await failed.screenshot({ path: path.join(output, "issue-5-history-api-failure.png"), fullPage: true });
     await failed.close();
 
@@ -101,6 +103,7 @@ async function openScenario(browser, scenario) {
       return prediction.includes("improving") || prediction.includes("declining") || prediction.includes("stable");
     }, { timeout: 20000 });
     const fallbackText = await ai.locator("#predictionResult").innerText();
+    assert.match(fallbackText, /AI service is unavailable\. Showing local analysis/i);
     assert.match(fallbackText, /improving|declining|stable/i);
     await ai.screenshot({ path: path.join(output, "issue-5-ai-fallback.png"), fullPage: true });
     await ai.close();
