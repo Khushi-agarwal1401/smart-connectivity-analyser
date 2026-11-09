@@ -1031,6 +1031,7 @@ async function loadNetworkHistory(range = null) {
 
     const canvasContainer = $("historyChartContainer");
     const emptyState = $("historyEmptyState");
+    const errorState = $("historyErrorState");
 
     try {
         setHistoryFilterMessage("Loading network history...");
@@ -1063,6 +1064,8 @@ async function loadNetworkHistory(range = null) {
         if (!Array.isArray(data)) {
             throw new Error("Unexpected network history format.");
         }
+
+        if (errorState) errorState.hidden = true;
 
         sessionTests = data
             .map(normalizeHistoryItem)
@@ -1144,6 +1147,10 @@ async function loadNetworkHistory(range = null) {
 
         if (emptyState) {
             emptyState.hidden = true;
+        }
+
+        if (errorState) {
+            errorState.hidden = false;
         }
 
         updateSessionStatistics();
