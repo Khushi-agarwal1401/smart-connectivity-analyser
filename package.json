@@ -1,1 +1,17 @@
-{"private":true,"scripts":{"test":"node --test tests/dashboard-empty-states.test.js"}}
+{
+  "name": "smart-connectivity-analyser",
+  "version": "1.0.0",
+  "description": "Web application for monitoring internet connectivity and analysing network performance.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "network",
+    "speedtest",
+    "connectivity",
+    "analyser"
+  ],
+  "author": "Saurabh Wagh",
+  "license": "ISC"
+}
+
