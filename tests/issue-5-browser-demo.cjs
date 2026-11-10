@@ -27,8 +27,8 @@ const sampleHistory = [
   }
 ];
 
-async function openScenario(browser, scenario) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+async function openScenario(browser, scenario, viewport = { width: 1440, height: 1000 }) {
+  const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
   await page.addInitScript(() => {
     window.API_BASE = "http://127.0.0.1:8000/api";
   });
@@ -97,6 +97,26 @@ async function openScenario(browser, scenario) {
     await populated.screenshot({ path: path.join(output, "issue-5-populated-history.png"), fullPage: true });
     await populated.close();
 
+
+    // Verify both empty-history and API-error states at a mobile viewport.
+    const mobileViewport = { width: 390, height: 844 };
+
+    const mobileEmpty = await openScenario(browser, "empty", mobileViewport);
+    await mobileEmpty.waitForFunction(() => !document.getElementById("historyEmptyState").hidden);
+    assert.equal(await mobileEmpty.locator("#historyEmptyState").isVisible(), true);
+    assert.equal(await mobileEmpty.locator("#historyErrorState").isVisible(), false);
+    assert.deepEqual(mobileEmpty.viewportSize(), mobileViewport);
+    await mobileEmpty.screenshot({ path: path.join(output, "issue-5-mobile-empty-history.png"), fullPage: true });
+    await mobileEmpty.close();
+
+    const mobileFailed = await openScenario(browser, "api-failure", mobileViewport);
+    await mobileFailed.waitForFunction(() => !document.getElementById("historyErrorState").hidden);
+    assert.equal(await mobileFailed.locator("#historyErrorState").isVisible(), true);
+    assert.equal(await mobileFailed.locator("#historyEmptyState").isVisible(), false);
+    assert.deepEqual(mobileFailed.viewportSize(), mobileViewport);
+    await mobileFailed.screenshot({ path: path.join(output, "issue-5-mobile-history-api-failure.png"), fullPage: true });
+    await mobileFailed.close();
+
     const ai = await openScenario(browser, "ai-fallback");
     await ai.waitForFunction(() => {
       const prediction = document.getElementById("predictionResult")?.textContent || "";
@@ -108,7 +128,7 @@ async function openScenario(browser, scenario) {
     await ai.screenshot({ path: path.join(output, "issue-5-ai-fallback.png"), fullPage: true });
     await ai.close();
 
-    console.log("All four Issue #5 browser scenarios passed. Screenshots saved in artifacts/.");
+    console.log("All four Issue #5 browser scenarios passed, including both 390x844 mobile checks. Screenshots saved in artifacts/.");
   } finally {
     await browser.close();
   }
