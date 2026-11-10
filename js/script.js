@@ -353,7 +353,7 @@ function resolveNetworkType(connection, isOnline = true) {
         };
     }
 
-    if (rawType === "wifi") {
+    if (rawType === "wifi" || rawType === "wlan") {
         return {
             type: "Wi-Fi",
             detail: "Wi-Fi connection",
@@ -362,7 +362,7 @@ function resolveNetworkType(connection, isOnline = true) {
         };
     }
 
-    if (rawType === "cellular") {
+    if (rawType === "cellular" || rawType === "mobile" || rawType.startsWith("cellular")) {
         const speedContext = rawEffectiveType
             ? `Cellular (~${rawEffectiveType.toUpperCase()} speed tier, generation unverified)`
             : "Cellular connection (generation unverified)";
