@@ -1031,6 +1031,7 @@ async function loadNetworkHistory(range = null) {
 
     const canvasContainer = $("historyChartContainer");
     const emptyState = $("historyEmptyState");
+    const errorState = $("historyErrorState");
 
     try {
         setHistoryFilterMessage("Loading network history...");
@@ -1064,6 +1065,8 @@ async function loadNetworkHistory(range = null) {
             throw new Error("Unexpected network history format.");
         }
 
+        if (errorState) errorState.hidden = true;
+
         sessionTests = data
             .map(normalizeHistoryItem)
             .filter((item) =>
@@ -1083,9 +1086,7 @@ async function loadNetworkHistory(range = null) {
 
             updateSessionStatistics();
 
-            setHistoryFilterMessage(
-                "No records match the selected filters."
-            );
+            setHistoryFilterMessage("");
 
             return;
         }
@@ -1146,12 +1147,13 @@ async function loadNetworkHistory(range = null) {
             emptyState.hidden = true;
         }
 
+        if (errorState) {
+            errorState.hidden = false;
+        }
+
         updateSessionStatistics();
 
-        setHistoryFilterMessage(
-            "Unable to load network history. Check the backend connection.",
-            true
-        );
+        setHistoryFilterMessage("");
     }
 }
 
@@ -1991,11 +1993,27 @@ async function updateAISectionsFromBackend() {
             { cache: "no-store" }
         );
 
-        if (!response.ok) return;
+        if (!response.ok) {
+            const prediction = $("predictionResult");
+            if (prediction) {
+                prediction.textContent =
+                    "AI service is unavailable. Showing local analysis: " +
+                    prediction.textContent;
+            }
+            return;
+        }
 
         const result = await response.json();
 
-        if (!result?.success) return;
+        if (!result?.success) {
+            const prediction = $("predictionResult");
+            if (prediction) {
+                prediction.textContent =
+                    "AI analysis is unavailable. Showing local analysis: " +
+                    prediction.textContent;
+            }
+            return;
+        }
 
         const predictionData = result.prediction || {};
         const anomalyData = result.anomaly || {};
@@ -2029,6 +2047,12 @@ async function updateAISectionsFromBackend() {
         }
 
     } catch (error) {
+        const prediction = $("predictionResult");
+        if (prediction) {
+            prediction.textContent =
+                "AI service is unavailable. Showing local analysis: " +
+                prediction.textContent;
+        }
         console.info(
             "Backend AI analysis unavailable:",
             error.message

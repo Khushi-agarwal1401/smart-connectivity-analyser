@@ -638,3 +638,11 @@ body {
 /* =========================================================
    END
    ========================================================= */
+
+
+/* Distinguish a failed history request from a successful empty result. */
+.history-error-state {
+    border-color: rgba(185, 28, 28, .3);
+    color: #b91c1c;
+}
+.history-error-state[hidden] { display: none !important; }
