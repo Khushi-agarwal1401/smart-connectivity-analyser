@@ -20,6 +20,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Install Chromium for behavioral tests
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Start static dashboard server
+        run: |
+          python3 -m http.server 4173 --directory . > /tmp/dashboard-server.log 2>&1 &
+          for attempt in $(seq 1 20); do
+            curl --fail http://127.0.0.1:4173/index.html >/dev/null && break
+            sleep 1
+          done
       - run: node --check js/script.js
       - run: node --test tests/dashboard-empty-states.test.js
       - run: python -m py_compile backend/main.py
