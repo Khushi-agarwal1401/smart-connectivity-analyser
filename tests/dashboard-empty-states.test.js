@@ -1,14 +1,23 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const html = fs.readFileSync("index.html", "utf8");
-const js = fs.readFileSync("js/script.js", "utf8");
-test("one chart canvas and separate empty/error states exist", () => {
-  assert.equal((html.match(/id=["']networkChart["']/g) || []).length, 1);
-  assert.match(html, /id=["']historyEmptyState["']/);
-  assert.match(html, /id=["']historyErrorState["']/);
-});
-test("history API failures do not display the empty-result state", () => {
-  assert.match(js, /if \(errorState\) errorState\.hidden = true/);
-  assert.match(js, /if \(errorState\) \{\s*errorState\.hidden = false;/);
+const { spawnSync } = require("node:child_process");
+const path = require("node:path");
+
+// Run the dashboard in a real Chromium browser and assert the four user-visible
+// states. The shared scenario runner also captures screenshots for the PR.
+test("dashboard empty, API error, populated history, and AI fallback behave correctly", () => {
+  const runner = path.join(__dirname, "issue-5-browser-demo.cjs");
+  const result = spawnSync(process.execPath, [runner], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    timeout: 120000
+  });
+
+  assert.equal(
+    result.status,
+    0,
+    [result.stdout, result.stderr].filter(Boolean).join("\n") ||
+      "Browser behavior scenarios failed."
+  );
+  assert.match(result.stdout, /All four Issue #5 browser scenarios passed/);
 });
